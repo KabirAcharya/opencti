@@ -34,6 +34,7 @@ interface ConfidenceFieldProps {
   entityType?: string;
   disabled?: boolean;
   maxConfidenceLevel?: number;
+  helperText?: string;
 }
 
 const ConfidenceField: FunctionComponent<ConfidenceFieldProps> = ({
@@ -48,37 +49,16 @@ const ConfidenceField: FunctionComponent<ConfidenceFieldProps> = ({
   entityType,
   disabled,
   maxConfidenceLevel,
+  helperText,
 }) => {
   const { t_i18n } = useFormatter();
   const finalLabel = label || t_i18n('Confidence level');
   const classes = useStyles();
   const { getEffectiveConfidenceLevel } = useConfidenceLevel();
   const effectiveMaxConfidence = getEffectiveConfidenceLevel(entityType, maxConfidenceLevel);
-  return (
-    <>{showAlert ? (<Alert
-      classes={{ root: classes.alert, message: classes.message }}
-      severity="info"
-      icon={false}
-      variant="outlined"
-      style={{ position: 'relative' }}
-      aria-label={finalLabel}
-                    >
-      <Field
-        component={InputSliderField}
-        variant={variant}
-        containerstyle={containerStyle}
-        fullWidth={true}
-        entityType={entityType}
-        attributeName={name}
-        name={name}
-        label={finalLabel}
-        onFocus={onFocus}
-        onSubmit={onSubmit}
-        editContext={editContext}
-        disabled={disabled}
-        maxLimit={effectiveMaxConfidence}
-      />
-    </Alert>) : (<Field
+
+  const Slider = (
+    <Field
       component={InputSliderField}
       variant={variant}
       containerstyle={containerStyle}
@@ -92,9 +72,22 @@ const ConfidenceField: FunctionComponent<ConfidenceFieldProps> = ({
       editContext={editContext}
       disabled={disabled}
       maxLimit={effectiveMaxConfidence}
-                 />)
-}</>
+      helperText={helperText}
+    />
   );
+
+  return showAlert ? (
+    <Alert
+      classes={{ root: classes.alert, message: classes.message }}
+      severity="info"
+      icon={false}
+      variant="outlined"
+      style={{ position: 'relative' }}
+      aria-label={finalLabel}
+    >
+      {Slider}
+    </Alert>
+  ) : Slider;
 };
 
 export default ConfidenceField;
