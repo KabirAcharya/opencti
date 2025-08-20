@@ -7,18 +7,32 @@ import Paper from '@mui/material/Paper';
 import { useFormatter } from '../../../../components/i18n';
 import TextField from '../../../../components/TextField';
 
+export const isValidHeaderName = (name: string): boolean => {
+  return /^[A-Za-z0-9!#$&\-\^_`|~]+$/.test(name);
+};
+
+export const areHeadersValid = (headers: { name: string, value: string }[]): boolean => {
+  return headers.every((header) => 
+    header.name && 
+    header.value && 
+    isValidHeaderName(header.name)
+  );
+};
+
 interface HeaderFieldAddProps {
   id: string;
   name: string;
   values: { name: string, value: string }[];
   containerStyle: { marginTop: number; width: string };
   setFieldValue?: (name: string, value: unknown) => void;
+  onChange?: (name: string, value: { name: string, value: string }[]) => void;
 }
 // eslint-disable-next-line import/prefer-default-export
 export const HeaderFieldAdd: FunctionComponent<HeaderFieldAddProps> = ({
   name,
   values,
   containerStyle,
+  onChange,
 }): ReactElement => {
   const { t_i18n } = useFormatter();
   return (
@@ -46,12 +60,22 @@ export const HeaderFieldAdd: FunctionComponent<HeaderFieldAddProps> = ({
                       variant="standard"
                       name={`${name}.${index}.name`}
                       label={t_i18n('Header name')}
+                      onSubmit={onChange ? () => {
+                        if (areHeadersValid(values)) {
+                          onChange(name, values);
+                        }
+                      } : undefined}
                     />
                     <Field
                       component={TextField}
                       variant="standard"
                       name={`${name}.${index}.value`}
                       label={t_i18n('Header value')}
+                      onSubmit={onChange ? () => {
+                        if (areHeadersValid(values)) {
+                          onChange(name, values);
+                        }
+                      } : undefined}
                     />
                   </div>
                   <IconButton
@@ -59,6 +83,12 @@ export const HeaderFieldAdd: FunctionComponent<HeaderFieldAddProps> = ({
                     aria-label="Delete"
                     onClick={() => {
                       arrayHelpers.remove(index);
+                      if (onChange) {
+                        const newValues = values.filter((_, i) => i !== index);
+                        if (areHeadersValid(newValues)) {
+                          onChange(name, newValues);
+                        }
+                      }
                     }}
                     size="large"
                     style={{ position: 'absolute', right: 0, top: 5 }}
@@ -76,6 +106,7 @@ export const HeaderFieldAdd: FunctionComponent<HeaderFieldAddProps> = ({
                 id="addHeader"
                 onClick={() => {
                   arrayHelpers.push({ name: '', value: '' });
+                  // Don't call onChange for adding empty headers - they're invalid until filled
                 }}
                 style={{ marginTop: (values?.length ?? 0) > 0 ? 20 : 0 }}
               >

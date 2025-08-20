@@ -40,6 +40,7 @@ interface ingestionCsvFeedTestDialogProps {
     ingestion_running?: boolean | null,
     csv_mapper_id?: string | FieldOption | null,
     user_id: string | FieldOption
+    headers: { name: string, value: string }[]
     markings: FieldOption[]
   }
   setIsCreateDisabled?: React.Dispatch<React.SetStateAction<boolean>>
@@ -78,6 +79,7 @@ const IngestionCsvFeedTestDialog: FunctionComponent<ingestionCsvFeedTestDialogPr
           csv_mapper_id: typeof values.csv_mapper_id === 'string' ? values.csv_mapper_id : values.csv_mapper_id?.value,
           csv_mapper: values.csv_mapper ? JSON.stringify((values.csv_mapper)) : undefined,
           csv_mapper_type: values.csv_mapper_type,
+          headers: values.headers,
           markings: values.markings.map((marking) => marking.value),
         },
       },

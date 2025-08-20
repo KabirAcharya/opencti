@@ -38,7 +38,7 @@ const useXtmHubUserPlatformToken = (): Return => {
     const tokenFromStorage = getSessionStorageItem<string>(XTM_HUB_USER_PLATFORM_TOKEN_KEY);
     if (tokenFromStorage) {
       setToken(tokenFromStorage);
-    } else {
+    } else if (window.opener) {
       window.opener.postMessage({ action: 'refresh-token' }, '*');
     }
   }, [token]);

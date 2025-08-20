@@ -99,6 +99,7 @@ export interface BasicStoreEntityIngestionCsv extends BasicStoreEntity {
   csv_mapper_id?: string
   authentication_type: IngestionAuthType.None | IngestionAuthType.Basic | IngestionAuthType.Bearer | IngestionAuthType.Certificate
   authentication_value?: string | null
+  headers?: { name: string, value: string }[]
   user_id: string | undefined
   ingestion_running: boolean
   last_execution_date: Date | undefined

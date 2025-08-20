@@ -46,6 +46,22 @@ import { regenerateCsvMapperUUID } from './ingestion-converter';
 
 const MINIMAL_CSV_FEED_COMPATIBLE_VERSION = '6.6.0';
 
+// Header validation function
+const validateHeaders = (headers?: { name: string, value: string }[] | null) => {
+  if (!headers || headers.length === 0) return; // Empty headers are fine
+  
+  const HTTP_TOKEN_REGEX = /^[A-Za-z0-9!#$&\-\^_`|~]+$/;
+  
+  headers.forEach((header) => {
+    if (!header.name || !header.value) {
+      throw ValidationError('headers', { message: 'Header name and value are required' });
+    }
+    if (!HTTP_TOKEN_REGEX.test(header.name)) {
+      throw ValidationError('headers', { message: `Header name must be a valid HTTP token ["${header.name}"]` });
+    }
+  });
+};
+
 export const findById = (context: AuthContext, user: AuthUser, ingestionId: string) => {
   return storeLoadById<BasicStoreEntityIngestionCsv>(context, user, ingestionId, ENTITY_TYPE_INGESTION_CSV);
 };
@@ -119,6 +135,7 @@ export const createOnTheFlyUser = async (context: AuthContext, user: AuthUser, i
 };
 
 export const addIngestionCsv = async (context: AuthContext, user: AuthUser, input: IngestionCsvAddInput) => {
+  validateHeaders(input.headers);
   if (input.authentication_value) {
     verifyIngestionAuthenticationContent(input.authentication_type, input.authentication_value);
   }
@@ -181,6 +198,13 @@ export const patchCsvIngestion = async (context: AuthContext, user: AuthUser, id
 };
 
 export const ingestionCsvEditField = async (context: AuthContext, user: AuthUser, ingestionId: string, input: EditInput[]) => {
+  // Validate headers if being updated
+  const headersField = input.find(editInput => editInput.key === 'headers');
+  if (headersField && headersField.value) {
+    const headers = Array.isArray(headersField.value) ? headersField.value : JSON.parse(headersField.value[0]);
+    validateHeaders(headers);
+  }
+  
   if (input.some(((editInput) => editInput.key === 'authentication_value'))) {
     const ingestionConfiguration = await findById(context, user, ingestionId);
     const authenticationValueField = input.find(((editInput) => editInput.key === 'authentication_value'));
@@ -268,6 +292,11 @@ export const fetchCsvFromUrl = async (csvMapper: CsvMapperParsed, ingestion: Bas
   const { limit = undefined } = opts;
   const headers = new OpenCTIHeaders();
   headers.Accept = 'application/csv';
+  const headerOptions = ingestion.headers ?? [];
+  for (let index = 0; index < headerOptions.length; index += 1) {
+    const h = headerOptions[index];
+    headers[h.name] = h.value;
+  }
   if (ingestion.authentication_type === IngestionAuthType.Basic) {
     const auth = Buffer.from(ingestion.authentication_value || '', 'utf-8').toString('base64');
     headers.Authorization = `Basic ${auth}`;
@@ -294,6 +323,7 @@ export const fetchCsvFromUrl = async (csvMapper: CsvMapperParsed, ingestion: Bas
 };
 
 export const testCsvIngestionMapping = async (context: AuthContext, user: AuthUser, input: IngestionCsvAddInput): Promise<CsvMapperTestResult> => {
+  validateHeaders(input.headers);
   if (input.authentication_value) {
     verifyIngestionAuthenticationContent(input.authentication_type, input.authentication_value);
   }
@@ -302,7 +332,8 @@ export const testCsvIngestionMapping = async (context: AuthContext, user: AuthUs
   const ingestion = {
     uri: input.uri,
     authentication_type: input.authentication_type,
-    authentication_value: input.authentication_value
+    authentication_value: input.authentication_value,
+    headers: input.headers
   } as BasicStoreEntityIngestionCsv;
   const { csvLines } = await fetchCsvFromUrl(parsedMapper, ingestion, { limit: 10 });
   if (parsedMapper.has_header) {

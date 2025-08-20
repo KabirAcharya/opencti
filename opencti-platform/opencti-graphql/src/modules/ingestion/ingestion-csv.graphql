@@ -1,4 +1,9 @@
 
+type IngestionHeader {
+    name: String!
+    value: String!
+}
+
 type IngestionCsv implements InternalObject & BasicObject {
     id: ID!
     entity_type: String!
@@ -14,6 +19,7 @@ type IngestionCsv implements InternalObject & BasicObject {
     csvMapper: CsvMapper!
     authentication_type: IngestionAuthType!
     authentication_value: String
+    headers: [IngestionHeader!]
     user_id: String!
     user: Creator
     ingestion_running: Boolean
@@ -82,6 +88,11 @@ type Query {
 }
 
 # Mutations
+input HeaderInput {
+    name: String!
+    value: String!
+}
+
 input IngestionCsvAddInput {
     name: String! @constraint(minLength: 2, format: "not-blank")
     description: String
@@ -97,6 +108,7 @@ input IngestionCsvAddInput {
     user_id: String!
     automatic_user: Boolean
     confidence_level: Int
+    headers: [HeaderInput!]
     markings: [String!]
 }
 

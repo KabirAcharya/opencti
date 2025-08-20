@@ -43,6 +43,7 @@ import { BASIC_AUTH, BEARER_AUTH, CERT_AUTH, extractCA, extractCert, extractKey,
 import PasswordTextField from '../../../../components/PasswordTextField';
 import SwitchField from '../../../../components/fields/SwitchField';
 import { RootMe_data$data } from '../../../__generated__/RootMe_data.graphql';
+import { HeaderFieldAdd, areHeadersValid } from '../../common/form/HeaderField';
 import IngestionCsvInlineWrapper from './IngestionCsvInlineWrapper';
 
 // Deprecated - https://mui.com/system/styles/basics/
@@ -70,6 +71,7 @@ export const initIngestionValue = (ingestionCsvData: IngestionCsvEditionFragment
     cert: ingestionCsvData.authentication_type === CERT_AUTH ? extractCert(ingestionCsvData.authentication_value) : undefined,
     key: ingestionCsvData.authentication_type === CERT_AUTH ? extractKey(ingestionCsvData.authentication_value) : undefined,
     ca: ingestionCsvData.authentication_type === CERT_AUTH ? extractCA(ingestionCsvData.authentication_value) : undefined,
+    headers: (ingestionCsvData.headers ?? []) as { name: string, value: string }[],
     ingestion_running: ingestionCsvData.ingestion_running,
     // In case the csv_mapper_id is not know, that mean we are in the older model where we link to an id by default
     csv_mapper_type: ingestionCsvData.csv_mapper_type === null ? true : ingestionCsvData.csv_mapper_type === 'id',
@@ -103,6 +105,10 @@ export const ingestionCsvEditionFragment = graphql`
     uri
     authentication_type
     authentication_value
+    headers {
+      name
+      value
+    }
     ingestion_running
     csv_mapper_type
     csvMapper {
@@ -201,6 +207,7 @@ interface IngestionCsvEditionForm {
   uri: string,
   authentication_type: string,
   authentication_value?: string | null,
+  headers: { name: string, value: string }[],
   ingestion_running?: boolean | null,
   csv_mapper_id: string | FieldOption | null,
   user_id: string | FieldOption,
@@ -258,6 +265,12 @@ const IngestionCsvEdition: FunctionComponent<IngestionCsvEditionProps> = ({
     cert: Yup.string().nullable(),
     key: Yup.string().nullable(),
     ca: Yup.string().nullable(),
+    headers: Yup.array().of(Yup.object().shape({
+      name: Yup.string()
+        .required(t_i18n('Header name is required'))
+        .matches(/^[A-Za-z0-9!#$&\-\^_`|~]+$/, t_i18n('Invalid header name. Only alphanumeric characters and !#$&-^_`|~ are allowed')),
+      value: Yup.string().required(t_i18n('Header value is required')),
+    })),
     csv_mapper: Yup.object().nullable(),
     csv_mapper_id: Yup.mixed().required(t_i18n('This field is required')),
     csv_mapper_type: Yup.string(),
@@ -456,6 +469,14 @@ const IngestionCsvEdition: FunctionComponent<IngestionCsvEditionProps> = ({
                 onSubmit={handleSubmitField}
                 style={fieldSpacingContainerStyle}
               />
+              <HeaderFieldAdd
+                id="headers"
+                name="headers"
+                values={values.headers}
+                containerStyle={fieldSpacingContainerStyle}
+                setFieldValue={setFieldValue}
+                onChange={(name, value) => handleSubmitField(name, value)}
+              />
               <CreatorField
                 name="user_id"
                 label={t_i18n('User responsible for data creation')}
@@ -625,7 +646,8 @@ const IngestionCsvEdition: FunctionComponent<IngestionCsvEditionProps> = ({
                 color="secondary"
                 onClick={() => setOpen(true)}
                 classes={{ root: classes.button }}
-                disabled={!(values.uri && (values.csv_mapper_id || values.csv_mapper))}
+                disabled={!(values.uri && (values.csv_mapper_id || values.csv_mapper)) || 
+                  (values.headers && values.headers.length > 0 && !areHeadersValid(values.headers))}
               >
                 {t_i18n('Verify')}
               </Button>

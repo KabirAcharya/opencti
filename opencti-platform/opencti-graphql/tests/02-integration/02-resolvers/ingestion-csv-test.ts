@@ -110,7 +110,7 @@ describe('CSV ingestion resolver standard behavior', () => {
   });
 
   it('should create a CSV feeds ingester with inline CSV Mapper and auto user', async () => {
-    const input : IngestionCsvAddInput = {
+    const input: IngestionCsvAddInput = {
       authentication_type: IngestionAuthType.None,
       name: 'Single column inline and auto user',
       uri: 'https://lists.blocklist.de/lists/all.txt',
@@ -371,7 +371,8 @@ describe('CSV ingestion resolver standard behavior', () => {
     };
     await queryAsUserIsExpectedForbidden(
       USER_PARTICIPATE.client,
-      { query: gql`
+      {
+        query: gql`
         mutation createSingleColumnCsvFeedsIngester($input: IngestionCsvAddInput!) {
           ingestionCsvAdd(input: $input) {
             id
@@ -380,7 +381,7 @@ describe('CSV ingestion resolver standard behavior', () => {
           }
         },
       `,
-      variables: CSV_FEED_INGESTER_TO_CREATE
+        variables: CSV_FEED_INGESTER_TO_CREATE
       },
       'CSVMAPPERS should be required to create csv mapper.'
     );
@@ -670,7 +671,7 @@ describe('CSV ingestion resolver standard behavior', () => {
   });
 
   it('should duplicate with different CSVMapperId as we inline CSVMapper', async () => {
-    const input : IngestionCsvAddInput = {
+    const input: IngestionCsvAddInput = {
       authentication_type: IngestionAuthType.None,
       name: 'Single column inline and auto user',
       uri: 'https://lists.blocklist.de/lists/all.txt',
@@ -712,5 +713,152 @@ describe('CSV ingestion resolver standard behavior', () => {
       }
     });
     expect(csvMapperId).not.toEqual(getCsvFeedForDuplication?.data?.ingestionCsv.duplicateCsvMapper.id);
+  });
+
+  it('should create CSV feed with valid headers', async () => {
+    const inputWithHeaders: IngestionCsvAddInput = {
+      authentication_type: IngestionAuthType.None,
+      name: 'CSV feed with headers',
+      uri: 'https://example.com/test.csv',
+      csv_mapper: singleColumnCsvMapperForCsvFeedInline,
+      csv_mapper_type: IngestionCsvMapperType.Inline,
+      user_id: ADMIN_USER.id,
+      headers: [
+        { name: 'X-API-Key', value: 'test-key-123' },
+        { name: 'User-Agent', value: 'OpenCTI-Test' },
+        { name: 'Custom-Header', value: 'custom-value' }
+      ]
+    };
+
+    const createResult = await queryAsUserWithSuccess(USER_DISINFORMATION_ANALYST.client, {
+      query: gql`
+        mutation createCsvFeedWithHeaders($input: IngestionCsvAddInput!) {
+          ingestionCsvAdd(input: $input) {
+            id
+            name
+            headers {
+              name
+              value
+            }
+          }
+        }
+      `,
+      variables: { input: inputWithHeaders }
+    });
+
+    const csvFeed = createResult?.data?.ingestionCsvAdd;
+    expect(csvFeed.id).toBeDefined();
+    expect(csvFeed.headers).toHaveLength(3);
+    expect(csvFeed.headers).toEqual([
+      { name: 'X-API-Key', value: 'test-key-123' },
+      { name: 'User-Agent', value: 'OpenCTI-Test' },
+      { name: 'Custom-Header', value: 'custom-value' }
+    ]);
+
+    // Clean up
+    await queryAsAdmin({
+      query: gql`
+        mutation deleteCsvFeed($id: ID!) {
+          ingestionCsvDelete(id: $id)
+        }
+      `,
+      variables: { id: csvFeed.id }
+    });
+  });
+
+  it('should reject CSV feed with invalid header names', async () => {
+    const inputWithInvalidHeaders: IngestionCsvAddInput = {
+      authentication_type: IngestionAuthType.None,
+      name: 'CSV feed with invalid headers',
+      uri: 'https://example.com/test.csv',
+      csv_mapper: singleColumnCsvMapperForCsvFeedInline,
+      csv_mapper_type: IngestionCsvMapperType.Inline,
+      user_id: ADMIN_USER.id,
+      headers: [
+        { name: 'Invalid:Header', value: 'should-fail' }, // Colon not allowed
+        { name: 'Another(Invalid)', value: 'also-fails' }, // Parentheses not allowed
+        { name: 'Space Header', value: 'spaces-not-allowed' } // Spaces not allowed
+      ]
+    };
+
+    const createResult = await queryAsUserWithSuccess(USER_DISINFORMATION_ANALYST.client, {
+      query: gql`
+        mutation createCsvFeedWithInvalidHeaders($input: IngestionCsvAddInput!) {
+          ingestionCsvAdd(input: $input) {
+            id
+            name
+          }
+        }
+      `,
+      variables: { input: inputWithInvalidHeaders }
+    });
+
+    // Should fail due to validation
+    expect(createResult.errors).toBeDefined();
+    expect(createResult.errors?.[0].message).toContain('Header name must be a valid HTTP token');
+  });
+
+  it('should update CSV feed headers via field patch', async () => {
+    // Create a CSV feed first
+    const input: IngestionCsvAddInput = {
+      authentication_type: IngestionAuthType.None,
+      name: 'CSV feed for header update',
+      uri: 'https://example.com/test.csv',
+      csv_mapper: singleColumnCsvMapperForCsvFeedInline,
+      csv_mapper_type: IngestionCsvMapperType.Inline,
+      user_id: ADMIN_USER.id,
+      headers: [{ name: 'Initial-Header', value: 'initial-value' }]
+    };
+
+    const createResult = await queryAsAdminWithSuccess({
+      query: gql`
+        mutation createCsvFeedForHeaderUpdate($input: IngestionCsvAddInput!) {
+          ingestionCsvAdd(input: $input) {
+            id
+          }
+        }
+      `,
+      variables: { input }
+    });
+
+    const csvFeedId = createResult?.data?.ingestionCsvAdd?.id;
+
+    // Update headers via field patch
+    const newHeaders = [
+      { name: 'Updated-Header', value: 'updated-value' },
+      { name: 'Second-Header', value: 'second-value' }
+    ];
+
+    const updateResult = await queryAsAdminWithSuccess({
+      query: gql`
+        mutation updateCsvFeedHeaders($id: ID!, $input: [EditInput!]!) {
+          ingestionCsvFieldPatch(id: $id, input: $input) {
+            id
+            headers {
+              name
+              value
+            }
+          }
+        }
+      `,
+      variables: {
+        id: csvFeedId,
+        input: [{ key: 'headers', value: newHeaders }]
+      }
+    });
+
+    const updatedFeed = updateResult?.data?.ingestionCsvFieldPatch;
+    expect(updatedFeed.headers).toHaveLength(2);
+    expect(updatedFeed.headers).toEqual(newHeaders);
+
+    // Clean up
+    await queryAsAdmin({
+      query: gql`
+        mutation deleteCsvFeed($id: ID!) {
+          ingestionCsvDelete(id: $id)
+        }
+      `,
+      variables: { id: csvFeedId }
+    });
   });
 });

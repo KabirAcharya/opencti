@@ -42,6 +42,7 @@ import useGranted, { SETTINGS_SETACCESSES, VIRTUAL_ORGANIZATION_ADMIN } from '..
 import { USER_CHOICE_MARKING_CONFIG } from '../../../../utils/csvMapperUtils';
 import { convertMapper, convertUser } from '../../../../utils/edition';
 import { BASIC_AUTH, CERT_AUTH, extractCA, extractCert, extractKey, extractPassword, extractUsername } from '../../../../utils/ingestionAuthentificationUtils';
+import { HeaderFieldAdd, areHeadersValid } from '../../common/form/HeaderField';
 import useAuth from '../../../../utils/hooks/useAuth';
 import PasswordTextField from '../../../../components/PasswordTextField';
 import CreateEntityControlledDial from '../../../../components/CreateEntityControlledDial';
@@ -80,6 +81,7 @@ const initCSVCreateForm: IngestionCsvAddInput = {
   cert: '',
   key: '',
   ca: '',
+  headers: [],
   markings: [],
 };
 
@@ -139,6 +141,7 @@ export interface IngestionCsvAddInput {
   cert?: string
   key?: string
   ca?: string
+  headers: { name: string, value: string }[]
   markings: FieldOption[]
 }
 
@@ -212,6 +215,12 @@ const IngestionCsvCreation: FunctionComponent<IngestionCsvCreationProps> = ({ pa
     cert: Yup.string().nullable(),
     key: Yup.string().nullable(),
     ca: Yup.string().nullable(),
+    headers: Yup.array().of(Yup.object().shape({
+      name: Yup.string()
+        .required(t_i18n('Header name is required'))
+        .matches(/^[A-Za-z0-9!#$&\-\^_`|~]+$/, t_i18n('Invalid header name. Only alphanumeric characters and !#$&-^_`|~ are allowed')),
+      value: Yup.string().required(t_i18n('Header value is required')),
+    })),
     user_id: Yup.object(),
     automatic_user: Yup.boolean(),
     confidence_level: Yup.number().nullable(),
@@ -260,6 +269,7 @@ const IngestionCsvCreation: FunctionComponent<IngestionCsvCreationProps> = ({ pa
       user_id: typeof values.user_id === 'string' ? values.user_id : values.user_id?.value,
       automatic_user: values.automatic_user ?? true,
       ...((values.automatic_user !== false) && { confidence_level: Number(values.confidence_level) }),
+      headers: values.headers,
       markings: markings ?? [],
     };
     commit({
@@ -296,6 +306,7 @@ const IngestionCsvCreation: FunctionComponent<IngestionCsvCreationProps> = ({ pa
     cert: ingestionCsvData.authentication_type === CERT_AUTH ? extractCert(ingestionCsvData.authentication_value) : undefined,
     key: ingestionCsvData.authentication_type === CERT_AUTH ? extractKey(ingestionCsvData.authentication_value) : undefined,
     ca: ingestionCsvData.authentication_type === CERT_AUTH ? extractCA(ingestionCsvData.authentication_value) : undefined,
+    headers: (ingestionCsvData.headers ?? []) as { name: string, value: string }[],
     markings: me.allowed_marking?.filter(
       (marking) => ingestionCsvData.markings?.includes(marking.id),
     ).map((marking) => ({
@@ -305,10 +316,15 @@ const IngestionCsvCreation: FunctionComponent<IngestionCsvCreationProps> = ({ pa
   } : initCSVCreateForm;
 
   const disableVerify = (values: IngestionCsvAddInput): boolean => {
-    const { name, uri, csv_mapper_type, csv_mapper_id, csv_mapper } = values;
+    const { name, uri, csv_mapper_type, csv_mapper_id, csv_mapper, headers } = values;
 
     if (!uri || !name) {
       return true; // Disable if URI or name is missing
+    }
+
+    // Check if headers are valid
+    if (headers && headers.length > 0 && !areHeadersValid(headers)) {
+      return true; // Disable if any header is invalid
     }
 
     const canVerifyWithId = !!csv_mapper_type && !!csv_mapper_id;
@@ -370,6 +386,13 @@ const IngestionCsvCreation: FunctionComponent<IngestionCsvCreationProps> = ({ pa
                 label={t_i18n('CSV URL')}
                 fullWidth={true}
                 style={fieldSpacingContainerStyle}
+              />
+              <HeaderFieldAdd
+                id="headers"
+                name="headers"
+                values={values.headers}
+                containerStyle={fieldSpacingContainerStyle}
+                setFieldValue={setFieldValue}
               />
               <IngestionCsvCreationUserHandling/>
               <Box sx={{
